@@ -173,12 +173,13 @@ namespace Resist
 
             //SAIDA
             var output = new StringBuilder();
-            
+            var bars = new List<Bar>();
+
             //COMPRESSAO
             output.AppendLine(string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}", "BARRA".PadRight(8), "L (mm)".PadRight(6), "Nc (N)".PadRight(8), "My(N.mm)".PadRight(8),
                 "Mz(N.mm)".PadRight(8), "h adotado".PadRight(8), "k adotado".PadRight(10), "kl".PadRight(18), "Ncr (N)".PadRight(18), "S/R".PadRight(18), "h novo".PadRight(8)));
-            
-            var hset = new double[] { 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5 }; 
+
+            var hset = Range(0.5, 6, 0.01);
                 
             foreach (var compressao in compressoes)
             {
@@ -202,11 +203,12 @@ namespace Resist
                 var kl = getKl(hadotado, comprimento, k);
                 var ncr = getNcr(hadotado, comprimento, k, ec);
 
-                string saida = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}", inicio.PadRight(8), comprimento.ToString().PadRight(6), nc.ToString().PadRight(8),
-                    my.ToString().PadRight(8), mz.ToString().PadRight(8), hadotado.ToString().PadRight(8), k.ToString().PadRight(10), kl.ToString().PadRight(18), ncr.ToString().PadRight(18), 
-                    sr.ToString().PadRight(18), hnovo.ToString().PadRight(8));
+                string saida = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}", inicio.PadRight(8), comprimento.ToDotString().PadRight(6), nc.ToDotString().PadRight(8),
+                    my.ToDotString().PadRight(8), mz.ToDotString().PadRight(8), hadotado.ToDotString().PadRight(8), k.ToDotString().PadRight(10), kl.ToDotString().PadRight(18), ncr.ToDotString().PadRight(18),
+                    sr.ToDotString().PadRight(18), hnovo.ToDotString().PadRight(8));
                 output.AppendLine(saida);
                 //Console.WriteLine(saida);
+                bars.Add(new Bar() { CrossSection = hadotado, SuggestedCrossSection = hnovo, Length = comprimento });
             }
 
             //TRACAO
@@ -234,10 +236,11 @@ namespace Resist
                 var hnovo = BestCrossSectionTracao(hset, nt, my, mz, comprimento, ft);
                 //Console.WriteLine("{0} {1} {2} {3} {4}", nt, my, mz, comprimento, ft);
                 var sr = getSrTracao(hadotado, nt, my, mz, comprimento, ft);
-                string saida = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}", inicio.PadRight(8), comprimento.ToString().PadRight(6), nt.ToString().PadRight(8),
-                    my.ToString().PadRight(8), mz.ToString().PadRight(8), hadotado.ToString().PadRight(8), sr.ToString().PadRight(18), hnovo.ToString().PadRight(8));
+                string saida = string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}", inicio.PadRight(8), comprimento.ToDotString().PadRight(6), nt.ToDotString().PadRight(8),
+                    my.ToDotString().PadRight(8), mz.ToDotString().PadRight(8), hadotado.ToDotString().PadRight(8), sr.ToDotString().PadRight(18), hnovo.ToDotString().PadRight(8));
                 output.AppendLine(saida);
                 //Console.WriteLine(saida);
+                bars.Add(new Bar() { CrossSection = hadotado, SuggestedCrossSection = hnovo, Length = comprimento });
             }
 
             //CISALHAMENTO
@@ -249,15 +252,15 @@ namespace Resist
                 var barra = cis[0];
                 var startNode = cis[1];
                 var endNode = cis[2];
-                var vy = Math.Abs(double.Parse(cis[4])).ToString();
-                var vz = Math.Abs(double.Parse(cis[5])).ToString();
+                var vy = Math.Abs(double.Parse(cis[4])).ToDotString();
+                var vz = Math.Abs(double.Parse(cis[5])).ToDotString();
                 var mx = double.Parse(momentos.Single(x => x[0] == barra)[3]);
                 var inicio = string.Format("{0} {1};{2}", barra, startNode, endNode);
 
                 var section = comprimentos.Single(x => x[0] == barra)[4];
                 var hadotado = Math.Sqrt(double.Parse(sections.Single(x => x[0] == section)[1], CultureInfo.InvariantCulture));
 
-                string saida = string.Format("{0}\t{1}\t{2}\t{3}\t{4}", inicio.PadRight(8), vy.PadRight(8), vz.PadRight(8), mx.ToString().PadRight(8), hadotado.ToString().PadRight(8));
+                string saida = string.Format("{0}\t{1}\t{2}\t{3}\t{4}", inicio.PadRight(8), vy.PadRight(8), vz.PadRight(8), mx.ToDotString().PadRight(8), hadotado.ToDotString().PadRight(8));
                 output.AppendLine(saida);
                 //Console.WriteLine(saida);
             }
@@ -274,26 +277,65 @@ namespace Resist
             }
 
             output.AppendLine();
-            output.AppendLine(string.Format("Massa: {0} gramas", densidade * volume * 1000 / 9.81));
-
-            output.AppendLine();
+            output.AppendLine(string.Format("Massa com seções utilizadas: {0} gramas", densidade * bars.Sum(x => Math.Pow(x.CrossSection, 2) * x.Length) * 1000 / 9.81));
+            output.AppendLine(string.Format("Massa com seções otimizadas: {0} gramas", densidade * bars.Sum(x => Math.Pow(x.SuggestedCrossSection, 2) * x.Length) * 1000 / 9.81));
+            /*output.AppendLine();
             foreach (var h in hset)
             {
                 var fz = "0.000000000000";
                 output.AppendLine(string.Format("h = {0}\tArea = {1}\tIzz=Iyy = {2}\tJ = {3}\tZzz=Zyy = {4}", h.ToString().PadRight(4), Math.Pow(h, 2).ToString().PadRight(10),
                     (Math.Pow(h, 4) / 12).ToString(fz).PadRight(14), (Math.Pow(h, 4) / 6).ToString(fz).PadRight(14), (Math.Pow(h, 3) / 6).ToString(fz).PadRight(14)));
+            }*/
+
+            //Write sections to input into mastan's matlab .mat file
+
+            output.AppendLine();
+            var startLoad = @"Applied Load Ratio = ";
+            var endLoad = @"               
+                                                                            
+  Deflections                                                               
+     Node       X-disp          Y-disp          Z-disp";
+            output.AppendFormat("A estrutura aguentou: {0}% da carga\n", getBetween(readText, startLoad, endLoad));
+            output.AppendLine(); 
+            output.AppendLine(); 
+            output.AppendLine("Definição de seções: ");
+            output.AppendLine();
+            var crossSections = Range(0.1, 2, 0.1);//bars.OrderBy(x => x.SuggestedCrossSection).Select(x => x.SuggestedCrossSection).Distinct();
+            crossSections = crossSections.Concat(Range(2.01, 2.1, 0.01));
+            crossSections = crossSections.Concat(Range(2.2, 3, 0.1));
+            //var debug = crossSections.ToArray<double>();
+            output.AppendLine("Area Izz Iyy J Cw Zzz Zyy Ayy Azz : ");
+            output.AppendLine();
+            output.AppendLine("sect_info = [ ");
+            foreach(var h in crossSections)
+            {
+                var a = Math.Pow(h, 2).ToDotString("0.0000");
+                var i = (Math.Pow(h, 4)/12).ToDotString("0.0000");
+                var j = (Math.Pow(h, 4)/6).ToDotString("0.0000");
+                var z = (Math.Pow(h, 3)/6).ToDotString("0.0000");
+                output.AppendLine(string.Format("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11};", a, i, i, j, "0", z, z, "Inf", "Inf", "1.0000", "1.0000", "1.0000"));
             }
+            output.AppendLine("];");
+            output.AppendLine();
+            output.Append("data = [");
+            foreach(var h in crossSections)
+            {
+                output.Append(string.Format("'Balsa{0}';", h.ToDotString("0.00")));
+            }
+            output.AppendLine("];");
+            output.Append("sect_name = cellstr(data)';");
+
             File.WriteAllText("C:/Users/Panda/Desktop/report_formatted.txt", output.ToString());
         }
 
-        public static double BestCrossSectionTracao(double[] hset, double nt, double  my, double mz, double l, double ft)
+        public static double BestCrossSectionTracao(IEnumerable<double> hset, double nt, double my, double mz, double l, double ft)
         {
             double besth = 0;
             double bestsr = 0;
             foreach(var h in hset)
             {
                 var sr = getSrTracao(h, nt, my, mz, l, ft);
-                if(sr <= 1 && sr > bestsr)
+                if(sr <= 0.9999 && sr > bestsr)
                 {
                     besth = h;
                     bestsr = sr;
@@ -307,7 +349,7 @@ namespace Resist
             return nt / (Math.Pow(h, 2) * ft) + (my + mz + 2 * nt * l / 300) / (Math.Pow(h, 3) * ft / 6);
         }
 
-        public static double BestCrossSectionCompressao(double[] hset, double nc, double my, double mz, double l, double k, double fc, double ec)
+        public static double BestCrossSectionCompressao(IEnumerable<double> hset, double nc, double my, double mz, double l, double k, double fc, double ec)
         {
             double besth = 0;
             double bestsr = 0;
@@ -315,7 +357,7 @@ namespace Resist
             {
                 //Console.WriteLine(h);
                 var sr = getSrCompressao(h, nc, my, mz, l, k, fc, ec);
-                if (sr <= 1 && sr > bestsr)
+                if (sr <= 0.9999 && sr > bestsr)
                 {
                     besth = h;
                     bestsr = sr;
@@ -343,7 +385,7 @@ namespace Resist
             return k * l * Math.Sqrt(12) / h;
         }
 
-        public static double BestCrossSectionCisalhamento(double[] hset, double nt, double my, double mz, double l, double ft)
+        public static double BestCrossSectionCisalhamento(IEnumerable<double> hset, double nt, double my, double mz, double l, double ft)
         {
             double besth = 0;
             double bestsr = 0;
@@ -377,19 +419,47 @@ namespace Resist
         public static double calculateMass(List<Bar> bars)
         {
             double density = 2.943 * Math.Pow(10, -6);
-            return bars.Sum(x => x.Length * x.Section.Area) * density;
+            return bars.Sum(x => x.Length * x.CrossSection) * density;
+        }
+
+        public static IEnumerable<double> Range(double min, double max, double step)
+        {
+            double i;
+            for (i = min; i <= max; i += step)
+                yield return i;
+
+            if (i != max + step) // added only because you want max to be returned as last item
+                yield return max;
         }
 
         public class Bar
         {
             public double Length { get; set; }
-            public Section Section;
+            public double CrossSection { get; set; }
+            public double SuggestedCrossSection { get; set; }
         }
 
         public class Section
         {
             public int Number { get; set; }
             public double Area { get; set; }
+        }
+
+    }
+    public static class DoubleExtensions
+    {
+        public static string ToDotString(this double value)
+        {
+            var nfi = new NumberFormatInfo();
+            nfi.NumberDecimalSeparator = ".";
+            return value.ToString(nfi);
+        }
+
+        public static string ToDotString(this double value, string format)
+        {
+            var nfi = new NumberFormatInfo();
+            nfi.NumberDecimalSeparator = ".";
+            return value.ToString(format, nfi);
         }
     }
 }
